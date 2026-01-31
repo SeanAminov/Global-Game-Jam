@@ -20,6 +20,9 @@ public class PlayerMovement : MonoBehaviour
     public int maxJumps = 2;
     int jumpsRemaining;
 
+    [Header("Jump Charge")]
+    public float jumpChargeTime = 0.15f;
+
     public bool lightMask;
 
 
@@ -46,6 +49,9 @@ public class PlayerMovement : MonoBehaviour
     float wallJumpTimer;
     public Vector2 wallJumpPower = new Vector2(5f, 10f);
 
+    [HideInInspector] public bool isAttacking;
+    private PlayerAnimator playerAnimator;
+
 
     [Header("Gravity")]
     public float baseGravity = 1f;
@@ -55,7 +61,7 @@ public class PlayerMovement : MonoBehaviour
 
     void Start()
     {
-        
+        playerAnimator = GetComponent<PlayerAnimator>();
     }
 
     // Update is called once per frame
@@ -67,7 +73,7 @@ public class PlayerMovement : MonoBehaviour
         ProcessWallSlide();
         ProcessWallJump();
               
-        if (!isWallJumping) {
+        if (!isWallJumping && !isAttacking) {
          rb.linearVelocity = new Vector2(horizontalMovement * moveSpeed, rb.linearVelocity.y);
          Flip();
         }
@@ -92,12 +98,14 @@ public class PlayerMovement : MonoBehaviour
         if (jumpsRemaining > 0) {
             if (context.performed)
             {
-              //  Debug.Log("normal juump");
-                rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpPower);
-                jumpsRemaining--;
+                // Trigger jump animation immediately
+                if (playerAnimator != null)
+                {
+                    playerAnimator.TriggerJump();
+                }
+                StartCoroutine(ChargeAndJump());
             } else if (context.canceled && rb.linearVelocity.y > 0)
             {
-             //    Debug.Log("Message here");
                 rb.linearVelocity = new Vector2(rb.linearVelocity.x, rb.linearVelocity.y * 0.5f);
                 jumpsRemaining--;
             }
@@ -121,6 +129,13 @@ public class PlayerMovement : MonoBehaviour
 
             Invoke(nameof(CancelWallJump), wallJumpTime + 0.1f);
         }
+    }
+
+    private System.Collections.IEnumerator ChargeAndJump()
+    {
+        yield return new WaitForSeconds(jumpChargeTime);
+        rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpPower);
+        jumpsRemaining--;
     }
 
     private void GroundCheck()

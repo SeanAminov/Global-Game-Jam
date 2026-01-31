@@ -8,6 +8,10 @@ public class PlayerHealth : MonoBehaviour
 
     public HealthUi healthUI;
 
+    [Header("Knockback Settings")]
+    public Rigidbody2D rb;
+    public float knockbackForce = 10f;
+
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
@@ -21,15 +25,23 @@ public class PlayerHealth : MonoBehaviour
         Enemy enemy = collision.gameObject.GetComponent<Enemy>();
         if(enemy)
         {
-            TakeDamage(enemy.damage);
+            // Calculate knockback direction (away from enemy)
+            Vector2 knockbackDirection = (transform.position - enemy.transform.position).normalized;
+            TakeDamage(enemy.damage, knockbackDirection);
         }
     }
 
-    private void TakeDamage(int damage)
+    private void TakeDamage(int damage, Vector2 knockbackDirection)
     {   
         Debug.Log("Took damage");
         currentHealth -= damage;
         healthUI.UpdateHearts(currentHealth);
+
+        // Apply knockback
+        if (rb != null)
+        {
+            rb.linearVelocity = new Vector2(knockbackDirection.x * knockbackForce, knockbackForce * 0.5f);
+        }
 
         if(currentHealth <= 0)
         {

@@ -74,11 +74,14 @@ public class Enemy : MonoBehaviour
         }
     }
 
-    public void TakeDamage(int damage)
+    public void TakeDamage(int damage, Vector2 knockbackDirection, float knockbackForce)
     {
         currentHealth -= damage;
         StartCoroutine(FlashEffect());
         Debug.Log("Take Damage");
+
+        // Apply knockback
+        rb.linearVelocity = new Vector2(knockbackDirection.x * knockbackForce, knockbackForce * 0.5f);
 
         if (currentHealth <= 0)
         {
@@ -89,7 +92,7 @@ public class Enemy : MonoBehaviour
     private IEnumerator FlashEffect()
     {
         spriteRenderer.color = Color.white;
-        yield return new WaitForSeconds(0.1f);
+        yield return new WaitForSeconds(0.25f);
         spriteRenderer.color = originalColor;
     }
 
