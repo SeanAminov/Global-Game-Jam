@@ -140,8 +140,9 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 256
   chaseSpeed: 2
-  jumpForce: 3
+  jumpForce: 2
   detectionRange: 17
+  baseGroundRaycastDistance: 2
   attackRange: 1
   attackRangeBuffer: 1
   attackCooldown: 2
@@ -158,6 +159,7 @@ MonoBehaviour:
   attackMoveDistance: 0.5
   minRandomAttackInterval: 0.5
   maxRandomAttackInterval: 2
+  randomAttackRange: 3
   applySelfKnockbackOnAttack: 1
   selfKnockbackForce: 5
   selfKnockbackUpward: 0.5

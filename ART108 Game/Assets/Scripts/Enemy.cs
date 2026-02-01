@@ -40,6 +40,7 @@ public class Enemy : MonoBehaviour
     [Header("Random Attack")]
     public float minRandomAttackInterval = 1.0f;
     public float maxRandomAttackInterval = 2.5f;
+    public float randomAttackRange = 3f;
 
     [Header("Self Knockback on Attack")]
     public bool applySelfKnockbackOnAttack = true;
@@ -68,6 +69,8 @@ public class Enemy : MonoBehaviour
     private bool shouldJump;
     private Coroutine flashCoroutine;
     private float attackKnockbackEndTime;
+    private float timeInDetectionRange = 0f;
+    private float minTimeBeforeAttack = 0.5f;
 
     // Animator parameters
     private const string IS_WALKING = "isWalking";
@@ -117,7 +120,12 @@ public class Enemy : MonoBehaviour
             Debug.Log($"{name}: Distance={distanceToPlayer:F2}, DetectionRange={detectionRange}, AttackRange={attackRange}");
 
         if (distanceToPlayer > detectionRange)
+        {
+            timeInDetectionRange = 0f;
             return;
+        }
+
+        timeInDetectionRange += Time.deltaTime;
 
         isGrounded = Physics2D.Raycast(transform.position, Vector2.down, GroundRaycastDistance, groundLayer);
         float directionToPlayer = Mathf.Sign(Player.position.x - transform.position.x);
@@ -127,15 +135,18 @@ public class Enemy : MonoBehaviour
         float distanceFromAttackPoint = Vector2.Distance(attackOrigin, Player.position);
         bool isPlayerInAttackRange = distanceFromAttackPoint <= (attackRange + attackRangeBuffer);
 
-        // Attack if in range
-        if (isPlayerInAttackRange)
+        // Only attack if been in detection range long enough (walk toward first)
+        bool canAttack = timeInDetectionRange >= minTimeBeforeAttack;
+
+        // Attack if in melee range
+        if (isPlayerInAttackRange && canAttack)
         {
             if (debugAttackLogs) Debug.Log($"{name}: Player IN ATTACK RANGE!");
             TryAttack();
         }
 
-        // Random attack timer
-        if (Time.time >= nextRandomAttackTime)
+        // Random attack timer - only if within random attack range
+        if (Time.time >= nextRandomAttackTime && canAttack && distanceToPlayer <= randomAttackRange)
         {
             ScheduleNextRandomAttack();
             if (debugAttackLogs) Debug.Log($"{name}: Random attack attempt");
@@ -193,9 +204,12 @@ public class Enemy : MonoBehaviour
         if (animator != null)
             animator.SetTrigger(ATTACK_TRIGGER);
 
+        // Capture facing direction at attack time
+        bool facingRightAtAttack = IsFacingRight;
+
         // Show attack sprite for melee attacks
         if (!useProjectileAttack && attackPointSprite != null)
-            StartCoroutine(ShowAttackSprite());
+            StartCoroutine(ShowAttackSprite(facingRightAtAttack));
 
         // Self knockback (push back when attacking)
         if (applySelfKnockbackOnAttack && rb != null)
@@ -304,7 +318,7 @@ public class Enemy : MonoBehaviour
         Destroy(gameObject);
     }
 
-    private IEnumerator ShowAttackSprite()
+    private IEnumerator ShowAttackSprite(bool facingRight)
     {
         if (attackPointSprite == null || attackPoint == null)
             yield break;
@@ -312,9 +326,10 @@ public class Enemy : MonoBehaviour
         // Store original state
         Transform originalParent = attackPoint.parent;
         Vector3 originalLocalPos = attackPoint.localPosition;
+        Vector3 originalLocalScale = attackPoint.localScale;
 
         // Direction: right = +1, left = -1
-        float dir = IsFacingRight ? 1f : -1f;
+        float dir = facingRight ? 1f : -1f;
         Vector3 startPos = attackPoint.position;
         Vector3 endPos = startPos + Vector3.right * attackMoveDistance * dir;
 
@@ -335,6 +350,7 @@ public class Enemy : MonoBehaviour
         attackPointSprite.enabled = false;
         attackPoint.SetParent(originalParent, true);
         attackPoint.localPosition = originalLocalPos;
+        attackPoint.localScale = originalLocalScale;
     }
 
     private void OnDrawGizmosSelected()

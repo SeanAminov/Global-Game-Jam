@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -15,9 +16,14 @@ public class MaskManager : MonoBehaviour
 {
     public static MaskManager Instance { get; private set; }
 
+    // Events for mask equip/unequip
+    public event Action<MaskType> OnMaskEquipped;
+    public event Action<MaskType> OnMaskUnequipped;
+
     [Header("UI")]
-    public Slider equippedUsageBar;
-    public Slider unequippedUsageBar;
+    public Slider joyUsageBar;
+    public Slider sadUsageBar;
+    public Slider spiteUsageBar;
     public TextMeshProUGUI pickupText;
     public float pickupTextDuration = 2f;
 
@@ -30,9 +36,21 @@ public class MaskManager : MonoBehaviour
     public Key sadKey = Key.Digit2;
     public Key spiteKey = Key.Digit3;
 
+    [Header("Animator Override")]
+    public Animator playerAnimator;
+    public RuntimeAnimatorController defaultController;
+    public AnimatorOverrideController joyController;
+    public AnimatorOverrideController sadController;
+    public AnimatorOverrideController spiteController;
+
     private readonly HashSet<MaskType> ownedMasks = new HashSet<MaskType>();
     private MaskType? equippedMask = null;
-    private float usageTime = 0f;
+    private Dictionary<MaskType, float> maskUsageTimes = new Dictionary<MaskType, float>()
+    {
+        { MaskType.Joy, 0f },
+        { MaskType.Sad, 0f },
+        { MaskType.Spite, 0f }
+    };
     private float pickupTextTimer = 0f;
 
     private void Awake()
@@ -51,6 +69,21 @@ public class MaskManager : MonoBehaviour
         HandleInput();
         UpdateUsage();
         UpdatePickupText();
+    }
+
+    private void Start()
+    {
+        if (playerAnimator == null)
+        {
+            playerAnimator = GetComponent<Animator>();
+        }
+
+        if (playerAnimator != null && defaultController == null)
+        {
+            defaultController = playerAnimator.runtimeAnimatorController;
+        }
+
+        ApplyMaskController(equippedMask);
     }
 
     public void AddMask(MaskType type, string pickupMessage)
@@ -100,11 +133,23 @@ public class MaskManager : MonoBehaviour
 
         if (equippedMask == type)
         {
+            // Unequip
             equippedMask = null;
+            OnMaskUnequipped?.Invoke(type);
+            ApplyMaskController(equippedMask);
         }
         else
         {
+            // Unequip previous mask
+            if (equippedMask.HasValue)
+            {
+                OnMaskUnequipped?.Invoke(equippedMask.Value);
+            }
+
+            // Equip new mask
             equippedMask = type;
+            OnMaskEquipped?.Invoke(type);
+            ApplyMaskController(equippedMask);
         }
     }
     public bool IsMaskEquipped(MaskType type)
@@ -113,41 +158,34 @@ public class MaskManager : MonoBehaviour
     }
     private void UpdateUsage()
     {
-        if (equippedMask.HasValue)
+        // Update all masks
+        foreach (MaskType maskType in maskUsageTimes.Keys)
         {
-            usageTime = Mathf.Min(maxUsageTime, usageTime + Time.deltaTime);
-            SetBarVisibility(true);
-        }
-        else
-        {
-            usageTime = Mathf.Max(0f, usageTime - Time.deltaTime * rechargeSpeed);
-            SetBarVisibility(false);
-        }
-
-        float normalized = maxUsageTime > 0f ? usageTime / maxUsageTime : 0f;
-
-        if (equippedUsageBar != null)
-        {
-            equippedUsageBar.value = normalized;
+            if (equippedMask == maskType)
+            {
+                // Equipped: charge up
+                maskUsageTimes[maskType] = Mathf.Min(maxUsageTime, maskUsageTimes[maskType] + Time.deltaTime);
+            }
+            else
+            {
+                // Not equipped: drain down
+                maskUsageTimes[maskType] = Mathf.Max(0f, maskUsageTimes[maskType] - Time.deltaTime * rechargeSpeed);
+            }
         }
 
-        if (unequippedUsageBar != null)
-        {
-            unequippedUsageBar.value = normalized;
-        }
+        // Update UI bars
+        UpdateBar(MaskType.Joy, joyUsageBar);
+        UpdateBar(MaskType.Sad, sadUsageBar);
+        UpdateBar(MaskType.Spite, spiteUsageBar);
     }
 
-    private void SetBarVisibility(bool equipped)
+    private void UpdateBar(MaskType maskType, Slider bar)
     {
-        if (equippedUsageBar != null)
-        {
-            equippedUsageBar.gameObject.SetActive(equipped);
-        }
+        if (bar == null)
+            return;
 
-        if (unequippedUsageBar != null)
-        {
-            unequippedUsageBar.gameObject.SetActive(!equipped);
-        }
+        float normalized = maxUsageTime > 0f ? maskUsageTimes[maskType] / maxUsageTime : 0f;
+        bar.value = normalized;
     }
 
     private void UpdatePickupText()
@@ -161,6 +199,37 @@ public class MaskManager : MonoBehaviour
         if (pickupTextTimer <= 0f)
         {
             pickupText.gameObject.SetActive(false);
+        }
+    }
+
+    private void ApplyMaskController(MaskType? maskType)
+    {
+        if (playerAnimator == null)
+        {
+            return;
+        }
+
+        RuntimeAnimatorController targetController = defaultController;
+
+        if (maskType.HasValue)
+        {
+            switch (maskType.Value)
+            {
+                case MaskType.Joy:
+                    targetController = joyController != null ? joyController : defaultController;
+                    break;
+                case MaskType.Sad:
+                    targetController = sadController != null ? sadController : defaultController;
+                    break;
+                case MaskType.Spite:
+                    targetController = spiteController != null ? spiteController : defaultController;
+                    break;
+            }
+        }
+
+        if (targetController != null && playerAnimator.runtimeAnimatorController != targetController)
+        {
+            playerAnimator.runtimeAnimatorController = targetController;
         }
     }
 }
