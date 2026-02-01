@@ -30,6 +30,21 @@ public class PlayerMovement : MonoBehaviour
 
     public bool lightMask;
 
+    [Header("Audio")]
+    public AudioClip jumpSound;
+    public AudioClip footstepSound;
+    [Range(0f, 3f)]
+    public float jumpVolume = 1f;
+    [Range(0f, 3f)]
+    public float footstepVolume = 2f;
+    public float footstepInterval = 0.3f;  // Time between footstep sounds
+    private float footstepTimer;
+    public AudioClip punchSound;
+    private AudioSource audioSource;
+
+    [Header("Particles")]
+    public ParticleSystem jumpParticles;
+
 
     [UnitHeaderInspectable("Ground Check")]
     public Transform groundCheckPos;
@@ -74,6 +89,11 @@ public class PlayerMovement : MonoBehaviour
         playerAnimator = GetComponent<PlayerAnimator>();
         spriteRenderer = GetComponent<SpriteRenderer>();
         playerCollider = GetComponent<CapsuleCollider2D>();
+        audioSource = GetComponent<AudioSource>();
+        if (audioSource == null)
+        {
+            audioSource = gameObject.AddComponent<AudioSource>();
+        }
         if (spriteRenderer != null)
         {
             originalColor = spriteRenderer.color;
@@ -89,6 +109,7 @@ public class PlayerMovement : MonoBehaviour
         ProcessWallSlide();
         ProcessWallJump();
         UpdateMaskTint();
+        PlayFootsteps();
               
         if (!isWallJumping && !isAttacking) {
          float currentSpeed = moveSpeed;
@@ -98,6 +119,32 @@ public class PlayerMovement : MonoBehaviour
          }
          rb.linearVelocity = new Vector2(horizontalMovement * currentSpeed, rb.linearVelocity.y);
          Flip();
+        }
+    }
+
+    private void PlayFootsteps()
+    {
+        // Only play footsteps when grounded, moving, and not attacking
+        if (isGrounded && Mathf.Abs(horizontalMovement) > 0.1f && !isAttacking)
+        {
+            footstepTimer -= Time.deltaTime;
+            if (footstepTimer <= 0f)
+            {
+                if (audioSource != null && footstepSound != null)
+                {
+                    audioSource.PlayOneShot(footstepSound, footstepVolume);
+                }
+                footstepTimer = footstepInterval;
+            }
+        }
+        else
+        {
+            // Stop any playing footstep sound immediately
+            footstepTimer = 0f;
+            if (audioSource != null && audioSource.isPlaying && audioSource.clip == footstepSound)
+            {
+                audioSource.Stop();
+            }
         }
     }
 
@@ -164,6 +211,12 @@ public class PlayerMovement : MonoBehaviour
             isWallJumping = true;
             rb.linearVelocity = new Vector2(wallJumpDirection * wallJumpPower.x, wallJumpPower.y);
             wallJumpTimer = 0;
+            
+            // Play jump particles
+            if (jumpParticles != null)
+            {
+                jumpParticles.Play();
+            }
 
             if(transform.localScale.x != wallJumpDirection)
             {
@@ -237,6 +290,19 @@ public class PlayerMovement : MonoBehaviour
     private System.Collections.IEnumerator ChargeAndJump()
     {
         yield return new WaitForSeconds(jumpChargeTime);
+        
+        // Play jump sound after windup
+        if (audioSource != null && jumpSound != null)
+        {
+            audioSource.PlayOneShot(jumpSound, jumpVolume);
+        }
+        
+        // Play jump particles
+        if (jumpParticles != null)
+        {
+            jumpParticles.Play();
+        }
+        
         rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpPower);
         jumpsRemaining--;
     }
@@ -283,6 +349,11 @@ public class PlayerMovement : MonoBehaviour
     public bool WallCheck() {
          return Physics2D.OverlapBox(wallCheckPos.position, wallcheckSize, 0, wallLayer);
        
+    }
+
+    public void ResetJumps()
+    {
+        jumpsRemaining = maxJumps;
     }
 
 

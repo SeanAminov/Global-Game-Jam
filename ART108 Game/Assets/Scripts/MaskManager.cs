@@ -38,7 +38,7 @@ public class MaskManager : MonoBehaviour
     public Color spiteColor = Color.red;
 
     [Header("Usage Settings")]
-    public float maxUsageTime = 5f;
+    public float maxUsageTime = 10f;
     public float rechargeSpeed = 1f;
 
     [Header("Equip Keys")]
@@ -53,6 +53,10 @@ public class MaskManager : MonoBehaviour
     public AnimatorOverrideController sadController;
     public AnimatorOverrideController spiteController;
 
+    [Header("Audio")]
+    public AudioClip maskPickupSound;
+    private AudioSource audioSource;
+
     [Header("Debug")]
     public bool startWithAllMasks = false;
 
@@ -65,6 +69,7 @@ public class MaskManager : MonoBehaviour
         { MaskType.Spite, 0f }
     };
     private float pickupTextTimer = 0f;
+    private bool maskTakeoverTriggered = false;  // Prevent repeated death calls
 
     private void Awake()
     {
@@ -86,6 +91,12 @@ public class MaskManager : MonoBehaviour
 
     private void Start()
     {
+        audioSource = GetComponent<AudioSource>();
+        if (audioSource == null)
+        {
+            audioSource = gameObject.AddComponent<AudioSource>();
+        }
+
         if (playerAnimator == null)
         {
             playerAnimator = GetComponent<Animator>();
@@ -111,6 +122,12 @@ public class MaskManager : MonoBehaviour
         if (!ownedMasks.Contains(type))
         {
             ownedMasks.Add(type);
+            
+            // Play pickup sound
+            if (audioSource != null && maskPickupSound != null)
+            {
+                audioSource.PlayOneShot(maskPickupSound);
+            }
             
             // Show the unequipped bar for this mask
             switch (type)
@@ -145,6 +162,11 @@ public class MaskManager : MonoBehaviour
             return;
         }
 
+        if (Keyboard.current[Key.M].wasPressedThisFrame)
+        {
+            GiveAllMasks();
+        }
+
         if (Keyboard.current[joyKey].wasPressedThisFrame)
         {
             ToggleMask(MaskType.Joy);
@@ -161,6 +183,27 @@ public class MaskManager : MonoBehaviour
         }
     }
 
+    private void GiveAllMasks()
+    {
+        ownedMasks.Add(MaskType.Joy);
+        ownedMasks.Add(MaskType.Sad);
+        ownedMasks.Add(MaskType.Spite);
+
+        if (joyUnequippedUsageBar != null)
+            joyUnequippedUsageBar.gameObject.SetActive(true);
+        if (sadUnequippedUsageBar != null)
+            sadUnequippedUsageBar.gameObject.SetActive(true);
+        if (spiteUnequippedUsageBar != null)
+            spiteUnequippedUsageBar.gameObject.SetActive(true);
+
+        if (pickupText != null)
+        {
+            pickupText.text = "All masks unlocked!";
+            pickupText.gameObject.SetActive(true);
+            pickupTextTimer = pickupTextDuration;
+        }
+    }
+
     private void ToggleMask(MaskType type)
     {
         if (!ownedMasks.Contains(type))
@@ -171,6 +214,7 @@ public class MaskManager : MonoBehaviour
         if (equippedMask == type)
         {
             // Unequip
+            maskTakeoverTriggered = false;  // Reset for next equip
             equippedMask = null;
             OnMaskUnequipped?.Invoke(type);
             ApplyMaskController(equippedMask);
@@ -205,6 +249,23 @@ public class MaskManager : MonoBehaviour
             {
                 // Equipped: charge up
                 maskUsageTimes[maskType] = Mathf.Min(maxUsageTime, maskUsageTimes[maskType] + Time.deltaTime);
+                
+                // Check if mask reached 100% - take 1 damage (only once)
+                if (maskUsageTimes[maskType] >= maxUsageTime && !maskTakeoverTriggered)
+                {
+                    PlayerHealth playerHealth = GetComponent<PlayerHealth>();
+                    if (playerHealth != null && !playerHealth.godMode)
+                    {
+                        maskTakeoverTriggered = true;
+                        // Apply damage instead of death
+                        Vector2 knockbackDir = Vector2.up;
+                        playerHealth.ApplyDamage(1, knockbackDir, 5f);
+                        
+                        // Reset mask bar after damage
+                        maskUsageTimes[maskType] = 0f;
+                        maskTakeoverTriggered = false;  // Allow it to happen again
+                    }
+                }
             }
             else
             {
@@ -270,7 +331,12 @@ public class MaskManager : MonoBehaviour
         if (bar == null)
             return;
 
+        // Ensure max value is 1 for proper fill
+        if (bar.maxValue != 1f)
+            bar.maxValue = 1f;
+
         float normalized = maxUsageTime > 0f ? maskUsageTimes[maskType] / maxUsageTime : 0f;
+        normalized = Mathf.Clamp01(normalized);  // Clamp between 0-1 to prevent over-fill issues
         bar.value = normalized;
     }
 
@@ -292,7 +358,6 @@ public class MaskManager : MonoBehaviour
     {
         if (playerAnimator == null)
         {
-            Debug.LogWarning("MaskManager: playerAnimator is null!");
             return;
         }
 
@@ -304,31 +369,19 @@ public class MaskManager : MonoBehaviour
             {
                 case MaskType.Joy:
                     targetController = joyController != null ? joyController : defaultController;
-                    Debug.Log($"Switching to Joy controller: {targetController?.name}");
                     break;
                 case MaskType.Sad:
                     targetController = sadController != null ? sadController : defaultController;
-                    Debug.Log($"Switching to Sad controller: {targetController?.name}");
                     break;
                 case MaskType.Spite:
                     targetController = spiteController != null ? spiteController : defaultController;
-                    Debug.Log($"Switching to Spite controller: {targetController?.name}");
                     break;
             }
-        }
-        else
-        {
-            Debug.Log($"Switching to Default controller: {targetController?.name}");
         }
 
         if (targetController != null && playerAnimator.runtimeAnimatorController != targetController)
         {
             playerAnimator.runtimeAnimatorController = targetController;
-            Debug.Log($"Controller swapped successfully! Current: {playerAnimator.runtimeAnimatorController.name}");
-        }
-        else
-        {
-            Debug.LogWarning($"Controller swap failed! targetController={targetController?.name}, current={playerAnimator.runtimeAnimatorController?.name}");
         }
     }
 }

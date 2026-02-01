@@ -8,7 +8,8 @@ public class StartScreenManager : MonoBehaviour
     public Button startButton;
     
     [Header("Scene Names")]
-    public string gameSceneName = "GameScene";  // Change to your game scene name
+    public string cutsceneSceneName = "Cutscene";  // New cutscene scene
+    public string gameSceneName = "GameScene";  // Your actual game scene (fallback)
 
     private void Start()
     {
@@ -32,7 +33,6 @@ public class StartScreenManager : MonoBehaviour
 
     public void StartGame()
     {
-        Debug.Log($"Loading scene: {gameSceneName}");
-        SceneManager.LoadScene(gameSceneName);
+        SceneManager.LoadScene(cutsceneSceneName);
     }
 }

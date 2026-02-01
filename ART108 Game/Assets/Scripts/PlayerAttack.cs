@@ -23,6 +23,15 @@ public class PlayerAttack : MonoBehaviour
     public float enemyKnockbackForce = 5f;
     public float attackLockTime = 0.15f;
 
+    [Header("Audio")]
+    public AudioClip punchSound;
+    public AudioClip hitSound;  // Plays when hitting enemy
+    [Range(0f, 3f)]
+    public float punchVolume = 1f;
+    [Range(0f, 3f)]
+    public float hitVolume = 1f;
+    private AudioSource audioSource;
+
     private PlayerMovement playerMovement;
     private PlayerAnimator playerAnimator;
     private SpriteRenderer attackPointSprite;
@@ -32,6 +41,11 @@ public class PlayerAttack : MonoBehaviour
     {
         playerMovement = GetComponent<PlayerMovement>();
         playerAnimator = GetComponent<PlayerAnimator>();
+        audioSource = GetComponent<AudioSource>();
+        if (audioSource == null)
+        {
+            audioSource = gameObject.AddComponent<AudioSource>();
+        }
 
         if (attackPoint != null)
         {
@@ -54,6 +68,12 @@ public class PlayerAttack : MonoBehaviour
 
     private void PerformAttack()
     {
+        // Play punch sound
+        if (audioSource != null && punchSound != null)
+        {
+            audioSource.PlayOneShot(punchSound, punchVolume);
+        }
+
         // Capture facing direction at attack time
         bool facingRight = playerMovement != null ? playerMovement.IsFacingRight : transform.localScale.x > 0;
 
@@ -102,6 +122,12 @@ public class PlayerAttack : MonoBehaviour
             {
                 Vector2 knockbackDir = (enemy.transform.position - transform.position).normalized;
                 enemyScript.TakeDamage(attackDamage, knockbackDir, enemyKnockbackForce);
+                
+                // Play hit sound when successfully hitting enemy
+                if (audioSource != null && hitSound != null)
+                {
+                    audioSource.PlayOneShot(hitSound, hitVolume);
+                }
             }
         }
 
