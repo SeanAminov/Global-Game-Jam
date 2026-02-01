@@ -57,6 +57,30 @@ public class PlayerAttack : MonoBehaviour
         // Capture facing direction at attack time
         bool facingRight = playerMovement != null ? playerMovement.IsFacingRight : transform.localScale.x > 0;
 
+        // Check if Spite mask is equipped - use pulse attack only
+        SpiteMaskAbility spiteAbility = GetComponent<SpiteMaskAbility>();
+        bool isSpiteEquipped = spiteAbility != null && MaskManager.Instance != null && MaskManager.Instance.IsMaskEquipped(MaskType.Spite);
+
+        if (isSpiteEquipped)
+        {
+            // SPITE MODE: Only pulse attack, no normal slash
+            spiteAbility.FireAuraBlast();
+            
+            // Trigger animation
+            if (playerAnimator != null)
+            {
+                playerAnimator.TriggerAttack();
+            }
+
+            // Player recoil (optional for spite - can remove if you don't want it)
+            if (playerRb != null && playerMovement != null)
+            {
+                StartCoroutine(AttackLock());
+            }
+            return;
+        }
+
+        // NORMAL MODE: Regular slash attack
         // Show attack sprite
         if (attackPointSprite != null)
         {

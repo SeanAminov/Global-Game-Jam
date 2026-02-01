@@ -36,6 +36,7 @@ public class Enemy : MonoBehaviour
     [Header("Attack Sprite Animation")]
     public float attackVisibleDuration = 0.3f;
     public float attackMoveDistance = 0.5f;
+    public float animationFrameDelay = 0f;  // Delay before firing projectile (for windup animation)
 
     [Header("Random Attack")]
     public float minRandomAttackInterval = 1.0f;
@@ -44,11 +45,15 @@ public class Enemy : MonoBehaviour
 
     [Header("Self Knockback on Attack")]
     public bool applySelfKnockbackOnAttack = true;
-    public float selfKnockbackForce = 2f;
-    public float selfKnockbackUpward = 0.5f;
+    public float selfKnockbackForce = 1f;  // Reduced for ranged enemies
+    public float selfKnockbackUpward = 0.2f;
 
     [Header("Health")]
     public int maxHealth = 3;
+
+    [Header("Heart Drop")]
+    public GameObject heartPrefab;
+    public float heartDropChance = 0.33f;  // 33% chance
 
     [Header("Visual")]
     public Color flashColor = Color.red;
@@ -157,16 +162,28 @@ public class Enemy : MonoBehaviour
         if ((directionToPlayer > 0 && !IsFacingRight) || (directionToPlayer < 0 && IsFacingRight))
             Flip();
 
-        // Chase player if grounded and not in attack range and not in knockback
-        if (isGrounded && !isPlayerInAttackRange && Time.time > attackKnockbackEndTime)
+        // Chase player if grounded and not in attack range
+        // For ranged enemies: always walk toward player unless in cooldown
+        if (isGrounded && Time.time > attackKnockbackEndTime)
         {
-            rb.linearVelocity = new Vector2(directionToPlayer * chaseSpeed, rb.linearVelocity.y);
-            CheckJump(directionToPlayer);
+            if (!isPlayerInAttackRange || useProjectileAttack)
+            {
+                rb.linearVelocity = new Vector2(directionToPlayer * chaseSpeed, rb.linearVelocity.y);
+                CheckJump(directionToPlayer);
+            }
+            else
+            {
+                // Melee enemy in range - stop moving
+                rb.linearVelocity = new Vector2(0, rb.linearVelocity.y);
+            }
         }
 
-        // Update animator
+        // Update animator - check if actively moving
         if (animator != null)
-            animator.SetBool(IS_WALKING, Mathf.Abs(rb.linearVelocity.x) > 0.1f && isGrounded);
+        {
+            bool isMoving = Mathf.Abs(rb.linearVelocity.x) > 0.1f && isGrounded && Time.time > attackKnockbackEndTime;
+            animator.SetBool(IS_WALKING, isMoving);
+        }
     }
 
     void FixedUpdate()
@@ -230,7 +247,8 @@ public class Enemy : MonoBehaviour
         // Deal damage to player (melee) or fire projectile (ranged)
         if (useProjectileAttack)
         {
-            FireProjectile();
+            // Delay projectile fire for animation windup
+            StartCoroutine(FireProjectileWithDelay(animationFrameDelay));
         }
         else
         {
@@ -246,6 +264,12 @@ public class Enemy : MonoBehaviour
                 }
             }
         }
+    }
+
+    private IEnumerator FireProjectileWithDelay(float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        FireProjectile();
     }
 
     private void FireProjectile()
@@ -310,6 +334,13 @@ public class Enemy : MonoBehaviour
 
     private void Die()
     {
+        // Drop heart with random chance
+        if (heartPrefab != null && Random.value < heartDropChance)
+        {
+            Instantiate(heartPrefab, transform.position, Quaternion.identity);
+            Debug.Log($"{name}: Dropped heart! ({heartDropChance * 100}% chance)");
+        }
+
         // Destroy attack sprite if it exists and was detached
         if (attackPoint != null)
         {

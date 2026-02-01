@@ -80,8 +80,8 @@ public class EnemyProjectile : MonoBehaviour
             return;
         }
 
-        // Ignore hitting the enemy that spawned it
-        if (other.CompareTag("Enemy"))
+        // Ignore hitting the enemy that spawned it (check by layer instead)
+        if (other.layer == LayerMask.NameToLayer("Enemy"))
         {
             return;
         }

@@ -227,7 +227,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 256
   chaseSpeed: 2
-  jumpForce: 2
+  jumpForce: 0.5
   detectionRange: 20
   baseGroundRaycastDistance: 2
   attackRange: 1
@@ -244,6 +244,7 @@ MonoBehaviour:
   projectileKnockbackForce: 5
   attackVisibleDuration: 0.3
   attackMoveDistance: 0.5
+  animationFrameDelay: 0.6
   minRandomAttackInterval: 0.5
   maxRandomAttackInterval: 2
   randomAttackRange: 3
@@ -251,6 +252,8 @@ MonoBehaviour:
   selfKnockbackForce: 5
   selfKnockbackUpward: 0.5
   maxHealth: 3
+  heartPrefab: {fileID: 5662570087940924917, guid: 2c977b243db281442a4ee119231347f5, type: 3}
+  heartDropChance: 0.33
   flashColor: {r: 1, g: 0, b: 0, a: 1}
   debugAttackLogs: 0
 --- !u!95 &5653163603255449773

@@ -21,11 +21,21 @@ public class MaskManager : MonoBehaviour
     public event Action<MaskType> OnMaskUnequipped;
 
     [Header("UI")]
-    public Slider joyUsageBar;
-    public Slider sadUsageBar;
-    public Slider spiteUsageBar;
+    public Slider equippedUsageBar;
+    public Image equippedFillImage;
+    public Slider joyUnequippedUsageBar;
+    public Image joyFillImage;
+    public Slider sadUnequippedUsageBar;
+    public Image sadFillImage;
+    public Slider spiteUnequippedUsageBar;
+    public Image spiteFillImage;
     public TextMeshProUGUI pickupText;
     public float pickupTextDuration = 2f;
+
+    [Header("Bar Colors")]
+    public Color joyColor = Color.yellow;
+    public Color sadColor = Color.blue;
+    public Color spiteColor = Color.red;
 
     [Header("Usage Settings")]
     public float maxUsageTime = 5f;
@@ -42,6 +52,9 @@ public class MaskManager : MonoBehaviour
     public AnimatorOverrideController joyController;
     public AnimatorOverrideController sadController;
     public AnimatorOverrideController spiteController;
+
+    [Header("Debug")]
+    public bool startWithAllMasks = false;
 
     private readonly HashSet<MaskType> ownedMasks = new HashSet<MaskType>();
     private MaskType? equippedMask = null;
@@ -83,6 +96,13 @@ public class MaskManager : MonoBehaviour
             defaultController = playerAnimator.runtimeAnimatorController;
         }
 
+        if (startWithAllMasks)
+        {
+            ownedMasks.Add(MaskType.Joy);
+            ownedMasks.Add(MaskType.Sad);
+            ownedMasks.Add(MaskType.Spite);
+        }
+
         ApplyMaskController(equippedMask);
     }
 
@@ -91,6 +111,23 @@ public class MaskManager : MonoBehaviour
         if (!ownedMasks.Contains(type))
         {
             ownedMasks.Add(type);
+            
+            // Show the unequipped bar for this mask
+            switch (type)
+            {
+                case MaskType.Joy:
+                    if (joyUnequippedUsageBar != null)
+                        joyUnequippedUsageBar.gameObject.SetActive(true);
+                    break;
+                case MaskType.Sad:
+                    if (sadUnequippedUsageBar != null)
+                        sadUnequippedUsageBar.gameObject.SetActive(true);
+                    break;
+                case MaskType.Spite:
+                    if (spiteUnequippedUsageBar != null)
+                        spiteUnequippedUsageBar.gameObject.SetActive(true);
+                    break;
+            }
         }
 
         if (pickupText != null)
@@ -158,8 +195,11 @@ public class MaskManager : MonoBehaviour
     }
     private void UpdateUsage()
     {
-        // Update all masks
-        foreach (MaskType maskType in maskUsageTimes.Keys)
+        // Update all masks (copy keys to avoid modifying during enumeration)
+        MaskType[] maskTypes = new MaskType[maskUsageTimes.Count];
+        maskUsageTimes.Keys.CopyTo(maskTypes, 0);
+
+        foreach (MaskType maskType in maskTypes)
         {
             if (equippedMask == maskType)
             {
@@ -173,10 +213,56 @@ public class MaskManager : MonoBehaviour
             }
         }
 
-        // Update UI bars
-        UpdateBar(MaskType.Joy, joyUsageBar);
-        UpdateBar(MaskType.Sad, sadUsageBar);
-        UpdateBar(MaskType.Spite, spiteUsageBar);
+        // Update equipped bar (shows only when mask is equipped)
+        if (equippedMask.HasValue)
+        {
+            if (equippedUsageBar != null)
+            {
+                equippedUsageBar.gameObject.SetActive(true);
+                UpdateBar(equippedMask.Value, equippedUsageBar);
+                
+                // Update equipped bar fill color to match the mask
+                if (equippedFillImage != null)
+                {
+                    Color equipColor = equippedMask.Value == MaskType.Joy ? joyColor :
+                                       equippedMask.Value == MaskType.Sad ? sadColor :
+                                       spiteColor;
+                    equippedFillImage.color = equipColor;
+                }
+            }
+        }
+        else
+        {
+            if (equippedUsageBar != null)
+            {
+                equippedUsageBar.gameObject.SetActive(false);
+            }
+        }
+
+        // Update unequipped bars (show only owned masks)
+        if (joyUnequippedUsageBar != null)
+        {
+            if (joyFillImage != null) joyFillImage.color = joyColor;
+            joyUnequippedUsageBar.gameObject.SetActive(ownedMasks.Contains(MaskType.Joy));
+            if (ownedMasks.Contains(MaskType.Joy))
+                UpdateBar(MaskType.Joy, joyUnequippedUsageBar);
+        }
+
+        if (sadUnequippedUsageBar != null)
+        {
+            if (sadFillImage != null) sadFillImage.color = sadColor;
+            sadUnequippedUsageBar.gameObject.SetActive(ownedMasks.Contains(MaskType.Sad));
+            if (ownedMasks.Contains(MaskType.Sad))
+                UpdateBar(MaskType.Sad, sadUnequippedUsageBar);
+        }
+
+        if (spiteUnequippedUsageBar != null)
+        {
+            if (spiteFillImage != null) spiteFillImage.color = spiteColor;
+            spiteUnequippedUsageBar.gameObject.SetActive(ownedMasks.Contains(MaskType.Spite));
+            if (ownedMasks.Contains(MaskType.Spite))
+                UpdateBar(MaskType.Spite, spiteUnequippedUsageBar);
+        }
     }
 
     private void UpdateBar(MaskType maskType, Slider bar)
@@ -206,6 +292,7 @@ public class MaskManager : MonoBehaviour
     {
         if (playerAnimator == null)
         {
+            Debug.LogWarning("MaskManager: playerAnimator is null!");
             return;
         }
 
@@ -217,19 +304,31 @@ public class MaskManager : MonoBehaviour
             {
                 case MaskType.Joy:
                     targetController = joyController != null ? joyController : defaultController;
+                    Debug.Log($"Switching to Joy controller: {targetController?.name}");
                     break;
                 case MaskType.Sad:
                     targetController = sadController != null ? sadController : defaultController;
+                    Debug.Log($"Switching to Sad controller: {targetController?.name}");
                     break;
                 case MaskType.Spite:
                     targetController = spiteController != null ? spiteController : defaultController;
+                    Debug.Log($"Switching to Spite controller: {targetController?.name}");
                     break;
             }
+        }
+        else
+        {
+            Debug.Log($"Switching to Default controller: {targetController?.name}");
         }
 
         if (targetController != null && playerAnimator.runtimeAnimatorController != targetController)
         {
             playerAnimator.runtimeAnimatorController = targetController;
+            Debug.Log($"Controller swapped successfully! Current: {playerAnimator.runtimeAnimatorController.name}");
+        }
+        else
+        {
+            Debug.LogWarning($"Controller swap failed! targetController={targetController?.name}, current={playerAnimator.runtimeAnimatorController?.name}");
         }
     }
 }

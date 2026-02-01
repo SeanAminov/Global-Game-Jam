@@ -19,9 +19,16 @@ public class PlayerHealth : MonoBehaviour
     [Header("Visual")]
     public Color flashColor = Color.black;
     public float flashInterval = 0.25f;
+
+    [Header("Death")]
+    public GameObject deathUI;  // Assign death/restart panel
+    
+    [Header("Developer Options")]
+    public bool godMode = false;  // Invincibility toggle
     
     private SpriteRenderer spriteRenderer;
     private Color originalColor;
+    private bool isDead = false;
 
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
@@ -33,6 +40,20 @@ public class PlayerHealth : MonoBehaviour
         if (spriteRenderer != null)
         {
             originalColor = spriteRenderer.color;
+            // Ensure alpha is 1
+            originalColor.a = 1f;
+        }
+    }
+
+    // Force reset visibility if something goes wrong
+    void LateUpdate()
+    {
+        // Safety check - if not invulnerable, ensure fully visible
+        if (!isInvulnerable && spriteRenderer != null && spriteRenderer.color.a < 1f)
+        {
+            Color c = spriteRenderer.color;
+            c.a = 1f;
+            spriteRenderer.color = c;
         }
     }
 
@@ -52,12 +73,18 @@ public class PlayerHealth : MonoBehaviour
 
     public void ApplyDamage(int damage, Vector2 knockbackDirection, float customKnockbackForce)
     {   
-        if (isInvulnerable)
+        if (isInvulnerable || isDead || godMode)
             return;
 
         Debug.Log("Took damage");
         currentHealth -= damage;
         healthUI.UpdateHearts(currentHealth);
+
+        // Flash red on damage
+        if (spriteRenderer != null)
+        {
+            StartCoroutine(DamageFlash());
+        }
 
         // Apply knockback
         if (rb != null)
@@ -70,41 +97,84 @@ public class PlayerHealth : MonoBehaviour
 
         if(currentHealth <= 0)
         {
-            //dead
+            Die();
         }
+    }
+
+    private void Die()
+    {
+        if (isDead)
+            return;
+
+        isDead = true;
+        Debug.Log("Player died!");
+
+        // Disable player controls
+        PlayerMovement movement = GetComponent<PlayerMovement>();
+        if (movement != null)
+            movement.enabled = false;
+
+        PlayerAttack attack = GetComponent<PlayerAttack>();
+        if (attack != null)
+            attack.enabled = false;
+
+        // Stop player movement
+        if (rb != null)
+            rb.linearVelocity = Vector2.zero;
+
+        // Show death UI
+        if (deathUI != null)
+        {
+            deathUI.SetActive(true);
+            Time.timeScale = 0f;  // Pause game
+        }
+    }
+
+    private System.Collections.IEnumerator DamageFlash()
+    {
+        // Flash red briefly
+        spriteRenderer.color = Color.red;
+        yield return new WaitForSeconds(0.15f);
+        spriteRenderer.color = originalColor;
+    }
+
+    public void Heal(int amount)
+    {
+        currentHealth = Mathf.Min(currentHealth + amount, maxHealth);
+        healthUI.UpdateHearts(currentHealth);
+        Debug.Log($"Healed! Current health: {currentHealth}/{maxHealth}");
+    }
+
+    public void GainMaxHealth(int amount)
+    {
+        maxHealth += amount;
+        currentHealth = maxHealth;  // Fill to new max
+        healthUI.SetMaxHearts(maxHealth);
+        healthUI.UpdateHearts(currentHealth);
+        Debug.Log($"Gained max health! Now at {currentHealth}/{maxHealth}");
     }
 
     private System.Collections.IEnumerator InvulnerabilityCoroutine()
     {
         isInvulnerable = true;
 
-        float elapsed = 0f;
-        bool showFlash = true;
+        // Just wait - no visual changes for now (debugging)
+        yield return new WaitForSeconds(invulnerabilityDuration);
 
-        while (elapsed < invulnerabilityDuration)
-        {
-            // Toggle between flash color and original
-            if (spriteRenderer != null)
-            {
-                spriteRenderer.color = showFlash ? flashColor : originalColor;
-            }
-            showFlash = !showFlash;
-
-            yield return new WaitForSeconds(flashInterval);
-            elapsed += flashInterval;
-        }
-
-        // Reset to original color and end invulnerability
-        if (spriteRenderer != null)
-        {
-            spriteRenderer.color = originalColor;
-        }
         isInvulnerable = false;
     }
 
-    // Update is called once per frame
-    void Update()
+    public void RestartGame()
     {
-        
+        Time.timeScale = 1f;  // Resume time
+        UnityEngine.SceneManagement.SceneManager.LoadScene(
+            UnityEngine.SceneManagement.SceneManager.GetActiveScene().name
+        );
+    }
+
+    public void LoadMainMenu()
+    {
+        Time.timeScale = 1f;
+        UnityEngine.SceneManagement.SceneManager.LoadScene("StartScreen");
     }
 }
