@@ -12,10 +12,16 @@ public class PlayerHealth : MonoBehaviour
     public Rigidbody2D rb;
     public float knockbackForce = 10f;
 
+    [Header("Invulnerability")]
+    public float invulnerabilityDuration = 3f;
+    private bool isInvulnerable = false;
+
     [Header("Visual")]
-    public Color flashColor = Color.red;
+    public Color flashColor = Color.black;
+    public float flashInterval = 0.25f;
     
     private SpriteRenderer spriteRenderer;
+    private Color originalColor;
 
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
@@ -24,10 +30,17 @@ public class PlayerHealth : MonoBehaviour
         currentHealth = maxHealth;
         healthUI.SetMaxHearts(maxHealth);
         spriteRenderer = GetComponent<SpriteRenderer>();
+        if (spriteRenderer != null)
+        {
+            originalColor = spriteRenderer.color;
+        }
     }
 
     private void OnCollisionEnter2D(Collision2D collision)
     {
+        if (isInvulnerable)
+            return;
+
         Enemy enemy = collision.gameObject.GetComponent<Enemy>();
         if(enemy)
         {
@@ -39,12 +52,12 @@ public class PlayerHealth : MonoBehaviour
 
     public void ApplyDamage(int damage, Vector2 knockbackDirection, float customKnockbackForce)
     {   
+        if (isInvulnerable)
+            return;
+
         Debug.Log("Took damage");
         currentHealth -= damage;
         healthUI.UpdateHearts(currentHealth);
-
-        // Flash effect
-        StartCoroutine(FlashEffect());
 
         // Apply knockback
         if (rb != null)
@@ -52,23 +65,41 @@ public class PlayerHealth : MonoBehaviour
             rb.linearVelocity = new Vector2(knockbackDirection.x * customKnockbackForce, customKnockbackForce * 0.5f);
         }
 
+        // Start invulnerability
+        StartCoroutine(InvulnerabilityCoroutine());
+
         if(currentHealth <= 0)
         {
             //dead
         }
     }
 
-    private System.Collections.IEnumerator FlashEffect()
+    private System.Collections.IEnumerator InvulnerabilityCoroutine()
     {
-        if (spriteRenderer == null)
+        isInvulnerable = true;
+
+        float elapsed = 0f;
+        bool showFlash = true;
+
+        while (elapsed < invulnerabilityDuration)
         {
-            yield break;
+            // Toggle between flash color and original
+            if (spriteRenderer != null)
+            {
+                spriteRenderer.color = showFlash ? flashColor : originalColor;
+            }
+            showFlash = !showFlash;
+
+            yield return new WaitForSeconds(flashInterval);
+            elapsed += flashInterval;
         }
-        
-        Color tempOriginal = spriteRenderer.color;
-        spriteRenderer.color = flashColor;
-        yield return new WaitForSeconds(0.25f);
-        spriteRenderer.color = tempOriginal;
+
+        // Reset to original color and end invulnerability
+        if (spriteRenderer != null)
+        {
+            spriteRenderer.color = originalColor;
+        }
+        isInvulnerable = false;
     }
 
     // Update is called once per frame

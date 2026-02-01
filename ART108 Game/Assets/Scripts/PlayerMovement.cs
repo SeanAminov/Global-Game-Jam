@@ -2,16 +2,20 @@ using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine.InputSystem;
+using UnityEngine.Tilemaps;
 using Unity.VisualScripting;
 
 public class PlayerMovement : MonoBehaviour
 {
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     public Rigidbody2D rb;
+
+    CapsuleCollider2D playerCollider;
     public float moveSpeed = 5f;
     public float joyMaskSpeedBoost = 1.5f;
 
     bool isFacingRight = true;
+    public bool IsFacingRight => isFacingRight;
     
 
     float horizontalMovement;
@@ -31,7 +35,10 @@ public class PlayerMovement : MonoBehaviour
     public Transform groundCheckPos;
     public Vector2 groundcheckSize = new Vector2(0.8f, 0.05f);
     public LayerMask groundLayer;
+    public LayerMask platformLayer;
     bool isGrounded;
+    bool isOnPlatform;
+    private Collider2D currentPlatformCollider;
 
 
 
@@ -66,6 +73,7 @@ public class PlayerMovement : MonoBehaviour
     {
         playerAnimator = GetComponent<PlayerAnimator>();
         spriteRenderer = GetComponent<SpriteRenderer>();
+        playerCollider = GetComponent<CapsuleCollider2D>();
         if (spriteRenderer != null)
         {
             originalColor = spriteRenderer.color;
@@ -159,7 +167,7 @@ public class PlayerMovement : MonoBehaviour
 
             if(transform.localScale.x != wallJumpDirection)
             {
-                Debug.Log("Wall Jump");
+            //    Debug.Log("Wall Jump");
                 isFacingRight = !isFacingRight;
                 Vector3 localScale = transform.localScale;
                 localScale.x *= -1f;
@@ -167,6 +175,62 @@ public class PlayerMovement : MonoBehaviour
             }
 
             Invoke(nameof(CancelWallJump), wallJumpTime + 0.1f);
+        }
+    }
+
+    public void Drop(InputAction.CallbackContext context)
+    {
+        if (context.performed && isOnPlatform && currentPlatformCollider != null)
+        {
+            StartCoroutine(TemporarilyIgnorePlatforms(0.5f));
+        }
+    }
+
+    private void OnCollisionEnter2D(Collision2D collision)
+    {
+        if (collision.gameObject.CompareTag("Platform"))
+        {
+            isOnPlatform = true;
+            currentPlatformCollider = collision.collider;
+        }
+    }
+
+    private void OnCollisionExit2D(Collision2D collision)
+    {
+        if (collision.gameObject.CompareTag("Platform"))
+        {
+            isOnPlatform = false;
+            currentPlatformCollider = null;
+        }
+    }
+
+    private IEnumerator TemporarilyIgnorePlatforms(float disableTime)
+    {
+        if (currentPlatformCollider == null)
+            yield break;
+
+        // Get the Tilemap Collider 2D from the platform and disable it
+        TilemapCollider2D tilemapCollider = currentPlatformCollider.GetComponent<TilemapCollider2D>();
+        CompositeCollider2D compositeCollider = currentPlatformCollider.GetComponent<CompositeCollider2D>();
+        
+        if (tilemapCollider != null)
+        {
+            tilemapCollider.enabled = false;
+        }
+        if (compositeCollider != null)
+        {
+            compositeCollider.enabled = false;
+        }
+        
+        yield return new WaitForSeconds(disableTime);
+        
+        if (tilemapCollider != null)
+        {
+            tilemapCollider.enabled = true;
+        }
+        if (compositeCollider != null)
+        {
+            compositeCollider.enabled = true;
         }
     }
 
@@ -179,13 +243,15 @@ public class PlayerMovement : MonoBehaviour
 
     private void GroundCheck()
     {
-        if(Physics2D.OverlapBox(groundCheckPos.position, groundcheckSize, 0f, groundLayer))
+        if (Physics2D.OverlapBox(groundCheckPos.position, groundcheckSize, 0f, groundLayer))
         {
             jumpsRemaining = maxJumps;
             isGrounded = true;
         }
-        isGrounded = false;
-        
+        else
+        {
+            isGrounded = false;
+        }
     }
 
     private void ProcessWallSlide() {

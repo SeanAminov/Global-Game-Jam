@@ -8,6 +8,7 @@ TagManager:
   - Ground
   - Enemies
   - UI
+  - Platform
   layers:
   - Default
   - TransparentFX
@@ -18,7 +19,7 @@ TagManager:
   - Wall
   - Enemy
   - Player
-  - 
+  - Platform
   - 
   - 
   - 

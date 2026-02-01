@@ -9,34 +9,36 @@ public class PlayerAttack : MonoBehaviour
     public float attackRange = 1.5f;
     public Transform attackPoint;
     public LayerMask enemyLayer;
+
+    [Header("Attack Sprite Animation")]
     public float attackVisibleDuration = 0.3f;
     public float attackMoveDistance = 0.5f;
 
-    [Header("Attack Cooldown")]
+    [Header("Cooldown")]
     public float attackCooldown = 0.5f;
-    private float lastAttackTime = -999f;
 
-    [Header("Knockback Settings")]
+    [Header("Knockback")]
     public Rigidbody2D playerRb;
     public float playerKnockbackForce = 3f;
     public float enemyKnockbackForce = 5f;
     public float attackLockTime = 0.15f;
-    
+
     private PlayerMovement playerMovement;
     private PlayerAnimator playerAnimator;
     private SpriteRenderer attackPointSprite;
+    private float lastAttackTime = -999f;
 
     void Start()
     {
         playerMovement = GetComponent<PlayerMovement>();
         playerAnimator = GetComponent<PlayerAnimator>();
-        
+
         if (attackPoint != null)
         {
             attackPointSprite = attackPoint.GetComponent<SpriteRenderer>();
             if (attackPointSprite != null)
             {
-                attackPointSprite.enabled = false; // Start invisible
+                attackPointSprite.enabled = false;
             }
         }
     }
@@ -45,7 +47,6 @@ public class PlayerAttack : MonoBehaviour
     {
         if (context.performed && Time.time >= lastAttackTime + attackCooldown)
         {
-            Debug.Log("Attack performed");
             PerformAttack();
             lastAttackTime = Time.time;
         }
@@ -53,38 +54,39 @@ public class PlayerAttack : MonoBehaviour
 
     private void PerformAttack()
     {
-        // Show attack point sprite
+        // Capture facing direction at attack time
+        bool facingRight = playerMovement != null ? playerMovement.IsFacingRight : transform.localScale.x > 0;
+
+        // Show attack sprite
         if (attackPointSprite != null)
         {
-            StartCoroutine(ShowAttackSprite());
+            StartCoroutine(ShowAttackSprite(facingRight));
         }
 
-        // Trigger attack animation immediately (before anything else)
+        // Trigger animation
         if (playerAnimator != null)
         {
             playerAnimator.TriggerAttack();
         }
 
+        // Damage enemies
         Collider2D[] hitEnemies = Physics2D.OverlapCircleAll(attackPoint.position, attackRange, enemyLayer);
-        Debug.Log("Enemies hit: " + hitEnemies.Length);
-
         foreach (Collider2D enemy in hitEnemies)
         {
             Enemy enemyScript = enemy.GetComponent<Enemy>();
             if (enemyScript != null)
             {
-                // Calculate knockback direction (away from player)
-                Vector2 knockbackDirection = (enemy.transform.position - transform.position).normalized;
-                enemyScript.TakeDamage(attackDamage, knockbackDirection, enemyKnockbackForce);
+                Vector2 knockbackDir = (enemy.transform.position - transform.position).normalized;
+                enemyScript.TakeDamage(attackDamage, knockbackDir, enemyKnockbackForce);
             }
         }
 
-        // Apply knockback to player (slight recoil) - happens on every attack
+        // Player recoil
         if (playerRb != null)
         {
-            float direction = transform.localScale.x > 0 ? -1f : 1f;
-            playerRb.linearVelocity = new Vector2(direction * playerKnockbackForce, playerRb.linearVelocity.y);
-            
+            float recoilDir = facingRight ? -1f : 1f;
+            playerRb.linearVelocity = new Vector2(recoilDir * playerKnockbackForce, playerRb.linearVelocity.y);
+
             if (playerMovement != null)
             {
                 StartCoroutine(AttackLock());
@@ -99,41 +101,41 @@ public class PlayerAttack : MonoBehaviour
         playerMovement.isAttacking = false;
     }
 
-    private IEnumerator ShowAttackSprite()
+    private IEnumerator ShowAttackSprite(bool facingRight)
     {
         if (attackPointSprite == null || attackPoint == null)
-        {
             yield break;
-        }
 
+        // Store original state
+        Transform originalParent = attackPoint.parent;
+        Vector3 originalLocalPos = attackPoint.localPosition;
+        Vector3 originalLocalScale = attackPoint.localScale;
+
+        // Direction: right = +1, left = -1
+        float dir = facingRight ? 1f : -1f;
+        Vector3 startPos = attackPoint.position;
+        Vector3 endPos = startPos + Vector3.right * attackMoveDistance * dir;
+
+        // Detach from player so it doesn't follow
+        attackPoint.SetParent(null, true);
+        attackPoint.localScale = Vector3.one; // Always positive scale, never flipped
+        attackPointSprite.flipX = facingRight; // Flip when facing right (sprite drawn facing left by default)
         attackPointSprite.enabled = true;
 
-        Vector3 originalPos = attackPoint.localPosition;
-        float direction = transform.localScale.x > 0 ? 1f : -1f;
-        Vector3 extendedPos = originalPos + Vector3.right * attackMoveDistance * direction;
-
-        // Move forward during attack
+        // Animate movement
         float elapsed = 0f;
         while (elapsed < attackVisibleDuration)
         {
             elapsed += Time.deltaTime;
-            float t = elapsed / attackVisibleDuration;
-            attackPoint.localPosition = Vector3.Lerp(originalPos, extendedPos, t * 0.6f); // 60% forward
+            attackPoint.position = Vector3.Lerp(startPos, endPos, elapsed / attackVisibleDuration);
             yield return null;
         }
 
-        // Move back to original position
-        elapsed = 0f;
-        while (elapsed < 0.1f)
-        {
-            elapsed += Time.deltaTime;
-            float t = elapsed / 0.1f;
-            attackPoint.localPosition = Vector3.Lerp(extendedPos, originalPos, t);
-            yield return null;
-        }
-
-        attackPoint.localPosition = originalPos;
+        // Restore
         attackPointSprite.enabled = false;
+        attackPoint.SetParent(originalParent, true);
+        attackPoint.localPosition = originalLocalPos;
+        attackPoint.localScale = originalLocalScale;
     }
 
     private void OnDrawGizmosSelected()
