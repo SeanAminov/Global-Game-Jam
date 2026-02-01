@@ -9,6 +9,7 @@ public class PlayerMovement : MonoBehaviour
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     public Rigidbody2D rb;
     public float moveSpeed = 5f;
+    public float joyMaskSpeedBoost = 1.5f;
 
     bool isFacingRight = true;
     
@@ -51,6 +52,8 @@ public class PlayerMovement : MonoBehaviour
 
     [HideInInspector] public bool isAttacking;
     private PlayerAnimator playerAnimator;
+    private SpriteRenderer spriteRenderer;
+    private Color originalColor;
 
 
     [Header("Gravity")]
@@ -62,6 +65,11 @@ public class PlayerMovement : MonoBehaviour
     void Start()
     {
         playerAnimator = GetComponent<PlayerAnimator>();
+        spriteRenderer = GetComponent<SpriteRenderer>();
+        if (spriteRenderer != null)
+        {
+            originalColor = spriteRenderer.color;
+        }
     }
 
     // Update is called once per frame
@@ -72,10 +80,41 @@ public class PlayerMovement : MonoBehaviour
         Gravity();
         ProcessWallSlide();
         ProcessWallJump();
+        UpdateMaskTint();
               
         if (!isWallJumping && !isAttacking) {
-         rb.linearVelocity = new Vector2(horizontalMovement * moveSpeed, rb.linearVelocity.y);
+         float currentSpeed = moveSpeed;
+         if (MaskManager.Instance != null && MaskManager.Instance.IsMaskEquipped(MaskType.Joy))
+         {
+             currentSpeed *= joyMaskSpeedBoost;
+         }
+         rb.linearVelocity = new Vector2(horizontalMovement * currentSpeed, rb.linearVelocity.y);
          Flip();
+        }
+    }
+
+    private void UpdateMaskTint()
+    {
+        if (spriteRenderer == null || MaskManager.Instance == null)
+        {
+            return;
+        }
+
+        if (MaskManager.Instance.IsMaskEquipped(MaskType.Sad))
+        {
+            spriteRenderer.color = new Color(0.7f, 0.7f, 1f); // Sad blue tint
+        }
+        else if (MaskManager.Instance.IsMaskEquipped(MaskType.Joy))
+        {
+            spriteRenderer.color = Color.yellow;
+        }
+        else if (MaskManager.Instance.IsMaskEquipped(MaskType.Spite))
+        {
+            spriteRenderer.color = Color.red;
+        }
+        else
+        {
+            spriteRenderer.color = originalColor;
         }
     }
 

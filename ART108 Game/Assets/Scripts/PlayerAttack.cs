@@ -9,6 +9,8 @@ public class PlayerAttack : MonoBehaviour
     public float attackRange = 1.5f;
     public Transform attackPoint;
     public LayerMask enemyLayer;
+    public float attackVisibleDuration = 0.3f;
+    public float attackMoveDistance = 0.5f;
 
     [Header("Attack Cooldown")]
     public float attackCooldown = 0.5f;
@@ -22,11 +24,21 @@ public class PlayerAttack : MonoBehaviour
     
     private PlayerMovement playerMovement;
     private PlayerAnimator playerAnimator;
+    private SpriteRenderer attackPointSprite;
 
     void Start()
     {
         playerMovement = GetComponent<PlayerMovement>();
         playerAnimator = GetComponent<PlayerAnimator>();
+        
+        if (attackPoint != null)
+        {
+            attackPointSprite = attackPoint.GetComponent<SpriteRenderer>();
+            if (attackPointSprite != null)
+            {
+                attackPointSprite.enabled = false; // Start invisible
+            }
+        }
     }
 
     public void Attack(InputAction.CallbackContext context)
@@ -41,6 +53,12 @@ public class PlayerAttack : MonoBehaviour
 
     private void PerformAttack()
     {
+        // Show attack point sprite
+        if (attackPointSprite != null)
+        {
+            StartCoroutine(ShowAttackSprite());
+        }
+
         // Trigger attack animation immediately (before anything else)
         if (playerAnimator != null)
         {
@@ -79,6 +97,43 @@ public class PlayerAttack : MonoBehaviour
         playerMovement.isAttacking = true;
         yield return new WaitForSeconds(attackLockTime);
         playerMovement.isAttacking = false;
+    }
+
+    private IEnumerator ShowAttackSprite()
+    {
+        if (attackPointSprite == null || attackPoint == null)
+        {
+            yield break;
+        }
+
+        attackPointSprite.enabled = true;
+
+        Vector3 originalPos = attackPoint.localPosition;
+        float direction = transform.localScale.x > 0 ? 1f : -1f;
+        Vector3 extendedPos = originalPos + Vector3.right * attackMoveDistance * direction;
+
+        // Move forward during attack
+        float elapsed = 0f;
+        while (elapsed < attackVisibleDuration)
+        {
+            elapsed += Time.deltaTime;
+            float t = elapsed / attackVisibleDuration;
+            attackPoint.localPosition = Vector3.Lerp(originalPos, extendedPos, t * 0.6f); // 60% forward
+            yield return null;
+        }
+
+        // Move back to original position
+        elapsed = 0f;
+        while (elapsed < 0.1f)
+        {
+            elapsed += Time.deltaTime;
+            float t = elapsed / 0.1f;
+            attackPoint.localPosition = Vector3.Lerp(extendedPos, originalPos, t);
+            yield return null;
+        }
+
+        attackPoint.localPosition = originalPos;
+        attackPointSprite.enabled = false;
     }
 
     private void OnDrawGizmosSelected()
