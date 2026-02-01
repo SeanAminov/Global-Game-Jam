@@ -13,6 +13,9 @@ public class Enemy : MonoBehaviour
     public float chaseSpeed = 2f;
     public float jumpForce = 2f;
     public float detectionRange = 10f;
+    public float baseGroundRaycastDistance = 2f;
+
+    private float GroundRaycastDistance => baseGroundRaycastDistance * Mathf.Abs(transform.localScale.x);
 
     [Header("Attack")]
     public float attackRange = 1.2f;
@@ -20,6 +23,15 @@ public class Enemy : MonoBehaviour
     public float attackCooldown = 1f;
     public float attackKnockbackForce = 8f;
     public int damage = 1;
+
+    [Header("Ranged Attack")]
+    public bool useProjectileAttack = false;
+    public GameObject projectilePrefab;
+    public Transform projectileSpawnPoint;
+    public float projectileSpeed = 8f;
+    public float projectileLifetime = 3f;
+    public int projectileDamage = 1;
+    public float projectileKnockbackForce = 5f;
 
     [Header("Attack Sprite Animation")]
     public float attackVisibleDuration = 0.3f;
@@ -30,6 +42,7 @@ public class Enemy : MonoBehaviour
     public float maxRandomAttackInterval = 2.5f;
 
     [Header("Self Knockback on Attack")]
+    public bool applySelfKnockbackOnAttack = true;
     public float selfKnockbackForce = 2f;
     public float selfKnockbackUpward = 0.5f;
 
@@ -70,6 +83,12 @@ public class Enemy : MonoBehaviour
         animator = GetComponent<Animator>();
         spriteRenderer = GetComponent<SpriteRenderer>();
 
+        // Auto-find Player if not assigned
+        if (Player == null)
+        {
+            Player = GameObject.FindGameObjectWithTag("Player").transform;
+        }
+
         if (spriteRenderer != null)
             originalColor = spriteRenderer.color;
 
@@ -100,7 +119,7 @@ public class Enemy : MonoBehaviour
         if (distanceToPlayer > detectionRange)
             return;
 
-        isGrounded = Physics2D.Raycast(transform.position, Vector2.down, 2f, groundLayer);
+        isGrounded = Physics2D.Raycast(transform.position, Vector2.down, GroundRaycastDistance, groundLayer);
         float directionToPlayer = Mathf.Sign(Player.position.x - transform.position.x);
 
         // Check attack range from attack point
@@ -151,10 +170,10 @@ public class Enemy : MonoBehaviour
 
     private void CheckJump(float direction)
     {
-        bool isPlayerAbove = Physics2D.Raycast(transform.position, Vector2.up, 1.5f, 1 << Player.gameObject.layer);
-        RaycastHit2D groundInFront = Physics2D.Raycast(transform.position, new Vector2(direction, 0), 2f, groundLayer);
-        RaycastHit2D gapAhead = Physics2D.Raycast(transform.position + new Vector3(direction, 0, 0), Vector2.down, 2f, groundLayer);
-        RaycastHit2D platformAbove = Physics2D.Raycast(transform.position, Vector2.up, 3f, groundLayer);
+        bool isPlayerAbove = Physics2D.Raycast(transform.position, Vector2.up, GroundRaycastDistance, 1 << Player.gameObject.layer);
+        RaycastHit2D groundInFront = Physics2D.Raycast(transform.position, new Vector2(direction, 0), GroundRaycastDistance, groundLayer);
+        RaycastHit2D gapAhead = Physics2D.Raycast(transform.position + new Vector3(direction, 0, 0), Vector2.down, GroundRaycastDistance, groundLayer);
+        RaycastHit2D platformAbove = Physics2D.Raycast(transform.position, Vector2.up, GroundRaycastDistance * 1.5f, groundLayer);
 
         if ((!groundInFront.collider && !gapAhead.collider) || (isPlayerAbove && platformAbove.collider))
             shouldJump = true;
@@ -174,12 +193,12 @@ public class Enemy : MonoBehaviour
         if (animator != null)
             animator.SetTrigger(ATTACK_TRIGGER);
 
-        // Show attack sprite
-        if (attackPointSprite != null)
+        // Show attack sprite for melee attacks
+        if (!useProjectileAttack && attackPointSprite != null)
             StartCoroutine(ShowAttackSprite());
 
-        // Self knockback (push back when attacking) - always happens regardless of hit
-        if (rb != null)
+        // Self knockback (push back when attacking)
+        if (applySelfKnockbackOnAttack && rb != null)
         {
             float knockbackDir = IsFacingRight ? -1f : 1f;
             Vector2 knockbackVelocity = new Vector2(knockbackDir * selfKnockbackForce, selfKnockbackUpward);
@@ -194,16 +213,47 @@ public class Enemy : MonoBehaviour
             Debug.Log($"{name}: rb is NULL - cannot apply self knockback!");
         }
 
-        // Deal damage to player
-        Vector2 origin = attackPoint != null ? (Vector2)attackPoint.position : (Vector2)transform.position;
-        Collider2D playerHit = Physics2D.OverlapCircle(origin, attackRange, playerLayer);
-        if (playerHit != null)
+        // Deal damage to player (melee) or fire projectile (ranged)
+        if (useProjectileAttack)
         {
-            PlayerHealth playerHealth = playerHit.GetComponent<PlayerHealth>();
-            if (playerHealth != null)
+            FireProjectile();
+        }
+        else
+        {
+            Vector2 origin = attackPoint != null ? (Vector2)attackPoint.position : (Vector2)transform.position;
+            Collider2D playerHit = Physics2D.OverlapCircle(origin, attackRange, playerLayer);
+            if (playerHit != null)
             {
-                Vector2 knockbackDir = (playerHit.transform.position - transform.position).normalized;
-                playerHealth.ApplyDamage(damage, knockbackDir, attackKnockbackForce);
+                PlayerHealth playerHealth = playerHit.GetComponent<PlayerHealth>();
+                if (playerHealth != null)
+                {
+                    Vector2 knockbackDir = (playerHit.transform.position - transform.position).normalized;
+                    playerHealth.ApplyDamage(damage, knockbackDir, attackKnockbackForce);
+                }
+            }
+        }
+    }
+
+    private void FireProjectile()
+    {
+        if (projectilePrefab == null)
+            return;
+
+        Transform spawn = projectileSpawnPoint != null ? projectileSpawnPoint : (attackPoint != null ? attackPoint : transform);
+        Vector2 dir = (Player.position - spawn.position).normalized;
+
+        GameObject projectile = Instantiate(projectilePrefab, spawn.position, Quaternion.identity);
+        EnemyProjectile enemyProjectile = projectile.GetComponent<EnemyProjectile>();
+        if (enemyProjectile != null)
+        {
+            enemyProjectile.Initialize(dir, projectileSpeed, projectileLifetime, projectileDamage, projectileKnockbackForce);
+        }
+        else
+        {
+            Rigidbody2D projRb = projectile.GetComponent<Rigidbody2D>();
+            if (projRb != null)
+            {
+                projRb.linearVelocity = dir * projectileSpeed;
             }
         }
     }
@@ -246,6 +296,11 @@ public class Enemy : MonoBehaviour
 
     private void Die()
     {
+        // Destroy attack sprite if it exists and was detached
+        if (attackPoint != null)
+        {
+            Destroy(attackPoint.gameObject);
+        }
         Destroy(gameObject);
     }
 

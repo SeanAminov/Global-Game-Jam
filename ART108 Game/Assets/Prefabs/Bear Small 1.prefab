@@ -141,16 +141,24 @@ MonoBehaviour:
     m_Bits: 256
   chaseSpeed: 2
   jumpForce: 3
-  detectionRange: 10
+  detectionRange: 17
   attackRange: 1
   attackRangeBuffer: 1
   attackCooldown: 2
   attackKnockbackForce: 8
   damage: 1
+  useProjectileAttack: 0
+  projectilePrefab: {fileID: 0}
+  projectileSpawnPoint: {fileID: 0}
+  projectileSpeed: 8
+  projectileLifetime: 3
+  projectileDamage: 1
+  projectileKnockbackForce: 5
   attackVisibleDuration: 0.3
   attackMoveDistance: 0.5
   minRandomAttackInterval: 0.5
   maxRandomAttackInterval: 2
+  applySelfKnockbackOnAttack: 1
   selfKnockbackForce: 5
   selfKnockbackUpward: 0.5
   maxHealth: 3
